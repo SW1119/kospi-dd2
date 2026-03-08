@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#ffffff">
+<title>KOSPI DD Monitor</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+KR:wght@300;400;600;900&display=swap');
+
+:root {
+  --bg:     #f5f6fa;
+  --card:   #ffffff;
+  --border: #e0e4ef;
+  --text:   #1a1a2e;
+  --muted:  #8890aa;
+  --green:  #00aa55;
+  --yellow: #e6a800;
+  --orange: #e05c00;
+  --red:    #d01030;
+  --blue:   #1a5fd4;
+  --accent: #00aa55;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:'Noto Sans KR',sans-serif; font-size:16px; }
+.wrap { max-width:700px; margin:0 auto; padding:24px 16px 60px; }
+
+header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; padding-bottom:16px; border-bottom:2px solid var(--border); }
+.logo { font-family:'Space Mono',monospace; font-size:15px; font-weight:700; letter-spacing:.08em; }
+.logo span { color:var(--blue); }
+#clock { font-family:'Space Mono',monospace; font-size:12px; color:var(--muted); text-align:right; line-height:1.7; }
+
+/* ── CSV 업로드 안내 ── */
+.upload-box {
+  background:var(--card); border:2px dashed var(--border);
+  border-radius:12px; padding:32px 24px;
+  text-align:center; margin-bottom:12px;
+  transition:border-color .2s;
+}
+.upload-box.drag { border-color:var(--blue); background:#f0f4ff; }
+.upload-icon { font-size:40px; margin-bottom:12px; }
+.upload-title { font-size:18px; font-weight:700; margin-bottom:8px; }
+.upload-desc { font-size:14px; color:var(--muted); line-height:1.8; margin-bottom:20px; }
+.upload-desc a { color:var(--blue); text-decoration:none; font-weight:600; }
+.upload-desc a:hover { text-decoration:underline; }
+.file-btn {
+  display:inline-block; padding:12px 28px;
+  background:var(--blue); color:#fff;
+  border-radius:8px; font-size:15px; font-weight:700;
+  cursor:pointer; border:none; transition:background .2s;
+  font-family:'Noto Sans KR',sans-serif;
+}
+.file-btn:hover { background:#1347a8; }
+#file-input { display:none; }
+
+.how-to {
+  background:#f0f4ff; border:1px solid #c0d0f0;
+  border-radius:10px; padding:20px;
+  font-size:13px; line-height:2; color:var(--text);
+  margin-bottom:12px;
+}
+.how-to strong { color:var(--blue); }
+.step { display:flex; gap:10px; align-items:flex-start; margin-bottom:4px; }
+.step-num { background:var(--blue); color:#fff; border-radius:50%; width:22px; height:22px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0; margin-top:2px; }
+
+/* ── 포지션 카드 ── */
+.pos-card { background:var(--card); border:2px solid var(--border); border-radius:12px; padding:24px 20px 20px; margin-bottom:12px; position:relative; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,.06); }
+.pos-card::before { content:''; position:absolute; top:0; left:0; right:0; height:4px; background:var(--accent); transition:background .4s; }
+.pos-label { font-family:'Space Mono',monospace; font-size:10px; letter-spacing:.18em; color:var(--muted); text-transform:uppercase; margin-bottom:10px; }
+.pos-row { display:flex; align-items:baseline; gap:10px; margin-bottom:6px; }
+.pos-num { font-family:'Space Mono',monospace; font-size:clamp(60px,16vw,90px); font-weight:700; line-height:1; color:var(--accent); transition:color .4s; }
+.pos-unit { font-size:22px; color:var(--muted); }
+.pos-desc { font-size:15px; color:var(--muted); margin-bottom:16px; }
+.stage-badge { display:inline-flex; align-items:center; gap:8px; padding:7px 14px; border-radius:6px; font-size:14px; font-weight:700; border:2px solid; transition:all .4s; }
+.dot { width:8px; height:8px; border-radius:50%; animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }
+
+.dd-bar { display:flex; align-items:center; gap:10px; margin-top:18px; padding-top:16px; border-top:1px solid var(--border); }
+.dd-bar-lbl { font-family:'Space Mono',monospace; font-size:10px; color:var(--muted); flex-shrink:0; line-height:1.6; }
+.dd-dots { display:flex; gap:5px; }
+.dd-dot { width:28px; height:28px; border-radius:4px; border:2px solid var(--border); background:transparent; transition:all .3s; }
+.dd-dot.s1 { background:var(--yellow); border-color:transparent; }
+.dd-dot.s2 { background:var(--orange); border-color:transparent; }
+.dd-dot.s3 { background:var(--red);    border-color:transparent; }
+.dd-num { font-family:'Space Mono',monospace; font-size:30px; font-weight:700; margin-left:6px; color:var(--accent); transition:color .4s; }
+.dd-den { font-size:15px; color:var(--muted); }
+
+/* 메트릭 */
+.metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:12px; }
+.metric { background:var(--card); border:2px solid var(--border); border-radius:10px; padding:14px 12px; box-shadow:0 1px 6px rgba(0,0,0,.04); }
+.m-lbl { font-family:'Space Mono',monospace; font-size:9px; color:var(--muted); letter-spacing:.1em; text-transform:uppercase; margin-bottom:7px; }
+.m-val { font-family:'Space Mono',monospace; font-size:20px; font-weight:700; line-height:1; }
+.m-sub { font-size:11px; color:var(--muted); margin-top:3px; }
+
+/* 섹션 */
+.sec { font-family:'Space Mono',monospace; font-size:10px; letter-spacing:.15em; color:var(--muted); text-transform:uppercase; margin:20px 0 9px; display:flex; align-items:center; gap:10px; }
+.sec::after { content:''; flex:1; height:1px; background:var(--border); }
+
+/* 단계 가이드 */
+.sg { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:12px; }
+.sg-item { background:var(--card); border:2px solid var(--border); border-radius:10px; padding:12px 6px; text-align:center; transition:all .4s; box-shadow:0 1px 6px rgba(0,0,0,.04); }
+.sg-dd  { font-family:'Space Mono',monospace; font-size:12px; font-weight:700; margin-bottom:3px; }
+.sg-nm  { font-size:10px; color:var(--muted); margin-bottom:5px; line-height:1.4; }
+.sg-pos { font-family:'Space Mono',monospace; font-size:20px; font-weight:900; }
+
+/* 테이블 */
+.tbl { background:var(--card); border:2px solid var(--border); border-radius:10px; overflow:hidden; margin-bottom:12px; box-shadow:0 1px 6px rgba(0,0,0,.04); }
+.tbl-hd { display:grid; padding:9px 14px; background:var(--bg); border-bottom:1px solid var(--border); font-family:'Space Mono',monospace; font-size:9px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase; }
+.tbl-row { display:grid; padding:11px 14px; border-bottom:1px solid var(--border); align-items:center; }
+.tbl-row:last-child { border-bottom:none; }
+.c4 { grid-template-columns:1fr 72px 82px 56px; }
+.c5 { grid-template-columns:1fr 72px 80px 60px 60px; }
+.in25 { background:rgba(208,16,48,.05); }
+.hl-r { background:rgba(208,16,48,.05); }
+.hl-o { background:rgba(224,92,0,.04); }
+.hl-y { background:rgba(230,168,0,.04); }
+.t-date { font-family:'Space Mono',monospace; font-size:13px; }
+.t-chg  { font-family:'Space Mono',monospace; font-size:13px; color:var(--red); font-weight:700; }
+.t-vol  { font-size:12px; color:var(--muted); }
+.t-dd   { font-family:'Space Mono',monospace; font-size:13px; font-weight:700; }
+.bdg    { display:inline-block; padding:2px 7px; border-radius:4px; font-family:'Space Mono',monospace; font-size:9px; font-weight:700; }
+.b25    { background:rgba(230,168,0,.15); color:var(--yellow); }
+.bold   { background:rgba(0,0,0,.05); color:var(--muted); }
+.tbl-empty { padding:22px; text-align:center; color:var(--muted); font-size:14px; }
+
+/* 연도 탭 */
+.ytabs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+.ytab { padding:5px 13px; border-radius:6px; border:2px solid var(--border); background:var(--card); color:var(--muted); font-family:'Space Mono',monospace; font-size:12px; font-weight:700; cursor:pointer; transition:all .2s; -webkit-appearance:none; }
+.ytab:hover  { border-color:var(--blue); color:var(--blue); }
+.ytab.active { border-color:var(--blue); background:var(--blue); color:#fff; }
+
+/* 버튼 */
+.btn { width:100%; padding:15px; background:var(--card); border:2px solid var(--border); color:var(--muted); font-family:'Space Mono',monospace; font-size:12px; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; border-radius:10px; transition:all .2s; margin-bottom:20px; -webkit-appearance:none; box-shadow:0 1px 6px rgba(0,0,0,.04); }
+.btn:hover { border-color:var(--blue); color:var(--blue); }
+footer { font-family:'Space Mono',monospace; font-size:10px; color:var(--muted); display:flex; justify-content:space-between; flex-wrap:wrap; gap:4px; padding-top:14px; border-top:1px solid var(--border); }
+
+@media(max-width:480px) {
+  .sg { grid-template-columns:repeat(2,1fr); }
+  .pos-num { font-size:52px; }
+  .c5 { grid-template-columns:1fr 68px 56px 52px; }
+  .c5 .t-vol { display:none; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">KOSPI <span>DD</span> MONITOR</div>
+    <div id="clock"></div>
+  </header>
+  <div id="app"><!-- 초기: 업로드 화면 --></div>
+</div>
+
+<script>
+const P = { dropThresh:-0.6, volMa:10, ddSignal:5, rolling:25, peak52wLo:-5 };
+const STAGES = [
+  { dd:0, label:'정상',    pos:100, color:'#00aa55' },
+  { dd:3, label:'🟡 경계', pos:75,  color:'#e6a800' },
+  { dd:4, label:'🟠 위험', pos:50,  color:'#e05c00' },
+  { dd:5, label:'🔴 신호', pos:25,  color:'#d01030' },
+];
+let ALL_ROWS = [];
+
+function tick() {
+  const kst = new Date(Date.now() + (9*3600 - new Date().getTimezoneOffset()*60)*1000);
+  document.getElementById('clock').innerHTML =
+    kst.toISOString().slice(0,10) + '<br>' + kst.toISOString().slice(11,19) + ' KST';
+}
+setInterval(tick,1000); tick();
+
+// ── 업로드 화면 ─────────────────────────────────────────
+function showUpload() {
+  document.getElementById('app').innerHTML = `
+    <div class="upload-box" id="drop-zone">
+      <div class="upload-icon">📂</div>
+      <div class="upload-title">KOSPI 데이터 파일 업로드</div>
+      <div class="upload-desc">
+        investing.com에서 받은 CSV 파일을 업로드하면<br>
+        인터넷 없이도 바로 분석됩니다.
+      </div>
+      <label class="file-btn" for="file-input">📁 CSV 파일 선택</label>
+      <input type="file" id="file-input" accept=".csv">
+    </div>
+
+    <div class="how-to">
+      <div style="font-weight:700; font-size:15px; margin-bottom:12px; color:var(--blue)">📥 데이터 다운로드 방법</div>
+      <div class="step"><div class="step-num">1</div><div><strong><a href="https://kr.investing.com/indices/kospi-historical-data" target="_blank">kr.investing.com/indices/kospi-historical-data</a></strong> 접속</div></div>
+      <div class="step"><div class="step-num">2</div><div>달력 아이콘 클릭 → 시작일 <strong>2010.01.01</strong> ~ 오늘 설정</div></div>
+      <div class="step"><div class="step-num">3</div><div>오른쪽 상단 <strong>다운로드 버튼(↓)</strong> 클릭 → CSV 저장</div></div>
+      <div class="step"><div class="step-num">4</div><div>위 버튼으로 저장된 CSV 업로드</div></div>
+    </div>
+  `;
+
+  document.getElementById('file-input').addEventListener('change', e => {
+    if (e.target.files[0]) readCSV(e.target.files[0]);
+  });
+
+  // 드래그앤드롭
+  const dz = document.getElementById('drop-zone');
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('drag');
+    if (e.dataTransfer.files[0]) readCSV(e.dataTransfer.files[0]);
+  });
+}
+
+// ── CSV 파싱 ────────────────────────────────────────────
+function readCSV(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const rows = parseCSV(e.target.result);
+      if (rows.length < 10) throw new Error('데이터가 너무 적습니다 (' + rows.length + '행)');
+      render(calc(rows));
+    } catch(err) {
+      document.getElementById('app').innerHTML = `
+        <div style="background:#fff5f6;border:2px solid #f0b0bc;border-radius:10px;padding:22px;font-size:14px;color:var(--red);line-height:1.9;margin-bottom:12px">
+          ⚠ 파일 파싱 오류<br>${err.message}
+        </div>`;
+      setTimeout(showUpload, 2000);
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+function parseCSV(text) {
+  // BOM 제거
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const lines = text.trim().split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length < 2) throw new Error('CSV 행이 부족합니다');
+
+  const header = lines[0].split(',').map(h => h.replace(/"/g,'').trim().toLowerCase());
+  // 컬럼 인덱스 탐색 (investing.com / yahoo finance 모두 대응)
+  const iDate  = header.findIndex(h => h.includes('date') || h.includes('날짜') || h==='date');
+  const iClose = header.findIndex(h => h.includes('price') || h.includes('close') || h.includes('종가') || h==='close');
+  const iVol   = header.findIndex(h => h.includes('vol') || h.includes('거래'));
+
+  if (iDate < 0 || iClose < 0) throw new Error(`컬럼을 찾지 못했습니다.\n헤더: ${lines[0]}`);
+
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    // 큰따옴표 안 콤마 처리
+    const cols = lines[i].match(/(".*?"|[^,]+)(?=,|$)/g) || lines[i].split(',');
+    const clean = cols.map(c => c.replace(/"/g,'').replace(/,/g,'').trim());
+
+    const rawDate  = clean[iDate]  || '';
+    const rawClose = clean[iClose] || '';
+    const rawVol   = iVol >= 0 ? (clean[iVol] || '0') : '0';
+
+    // 날짜 파싱 (YYYY-MM-DD, MM/DD/YYYY, DD.MM.YYYY 등)
+    let date = rawDate;
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(date)) {
+      const [m,d,y] = date.split('/'); date = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+    } else if (/^\d{2}\.\d{2}\.\d{4}$/.test(date)) {
+      const [d,m,y] = date.split('.'); date = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+    } else if (/^\d{4}\/\d{2}\/\d{2}$/.test(date)) {
+      date = date.replace(/\//g,'-');
+    }
+
+    const close = parseFloat(rawClose.replace(/[^\d.]/g,''));
+    // 거래량: K/M 단위 처리
+    let vol = 0;
+    if (rawVol && rawVol !== '-') {
+      const vStr = rawVol.toUpperCase().replace(/[^\d.KMB]/g,'');
+      if      (vStr.endsWith('B')) vol = parseFloat(vStr)*1e9;
+      else if (vStr.endsWith('M')) vol = parseFloat(vStr)*1e6;
+      else if (vStr.endsWith('K')) vol = parseFloat(vStr)*1e3;
+      else                         vol = parseFloat(vStr) || 1;
+    }
+    if (!date || isNaN(close) || close <= 0) continue;
+    if (vol === 0) vol = 1; // 거래량 없으면 1로 대체
+    rows.push({ date, close, vol });
+  }
+  // 날짜 오름차순 정렬
+  rows.sort((a,b) => a.date.localeCompare(b.date));
+  return rows;
+}
+
+// ── 지표 계산 ────────────────────────────────────────────
+function calc(rows) {
+  const n = rows.length;
+  for (let i = 0; i < n; i++) {
+    rows[i].chg     = i > 0 ? (rows[i].close - rows[i-1].close) / rows[i-1].close * 100 : 0;
+    rows[i].prevVol = i > 0 ? rows[i-1].vol : rows[i].vol;
+    const vs = rows.slice(Math.max(0,i-P.volMa+1),i+1).map(r=>r.vol);
+    rows[i].volMA = vs.reduce((a,b)=>a+b,0)/vs.length;
+    const hi = Math.max(...rows.slice(Math.max(0,i-251),i+1).map(r=>r.close));
+    rows[i].p52w = (rows[i].close-hi)/hi*100;
+    const cs = rows.slice(Math.max(0,i-59),i+1).map(r=>r.close);
+    rows[i].ma60 = cs.reduce((a,b)=>a+b,0)/cs.length;
+    rows[i].isDD = i > 0 &&
+      rows[i].chg    <= P.dropThresh &&
+      rows[i].vol    >  rows[i].volMA &&
+      rows[i].vol    >  rows[i].prevVol;
+    rows[i].ddCnt = rows.slice(Math.max(0,i-P.rolling+1),i+1).filter(r=>r.isDD).length;
+  }
+  return rows;
+}
+
+function getStage(n) { let s=STAGES[0]; for(const st of STAGES) if(n>=st.dd) s=st; return s; }
+
+// ── 과거 테이블 ──────────────────────────────────────────
+function renderHist(year) {
+  const src = year==='all' ? ALL_ROWS.filter(r=>r.isDD) : ALL_ROWS.filter(r=>r.isDD&&r.date.startsWith(String(year)));
+  const rev = [...src].reverse();
+  document.getElementById('hist-body').innerHTML = rev.length===0
+    ? `<div class="tbl-empty">해당 연도 분산일 없음</div>`
+    : rev.map(r=>{
+        const ddC = r.ddCnt>=5?'var(--red)':r.ddCnt>=4?'var(--orange)':r.ddCnt>=3?'var(--yellow)':'var(--muted)';
+        const hlC = r.ddCnt>=5?'hl-r':r.ddCnt>=4?'hl-o':r.ddCnt>=3?'hl-y':'';
+        const stg = getStage(r.ddCnt);
+        return `<div class="tbl-row c5 ${hlC}">
+          <div class="t-date">${r.date}</div>
+          <div class="t-chg">${r.chg.toFixed(2)}%</div>
+          <div class="t-vol">${r.vol>1?(r.vol/1e4).toFixed(0)+'만':'—'}</div>
+          <div class="t-dd" style="color:${ddC}">${r.ddCnt}일</div>
+          <div style="font-size:11px">${stg.dd>=3?stg.label:'—'}</div>
+        </div>`;
+      }).join('');
+}
+
+function setYear(year,btn) {
+  document.querySelectorAll('.ytab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderHist(year);
+}
+
+// ── 메인 렌더 ────────────────────────────────────────────
+function render(rows) {
+  ALL_ROWS = rows;
+  const lt=rows[rows.length-1], ddCnt=lt.ddCnt, p52w=lt.p52w, abvMA=lt.close>lt.ma60;
+  const filt=p52w<=P.peak52wLo, stage=filt?getStage(ddCnt):STAGES[0], pos=stage.pos;
+  document.documentElement.style.setProperty('--accent', stage.color);
+
+  const rec25=rows.slice(-25);
+  const recentDD=rows.filter(r=>r.isDD).slice(-20).reverse();
+
+  const dots=Array.from({length:7},(_,i)=>{
+    let c='dd-dot'; if(i<ddCnt) c+=i<2?' s1':i<3?' s2':' s3';
+    return `<div class="${c}"></div>`;
+  }).join('');
+
+  const sg=STAGES.map((s,i)=>{
+    const act=ddCnt>=s.dd&&(i===STAGES.length-1||ddCnt<STAGES[i+1].dd);
+    return `<div class="sg-item" style="border-color:${act?s.color:'var(--border)'};background:${act?s.color+'14':'var(--card)'}">
+      <div class="sg-dd" style="color:${s.color}">DD ${s.dd===0?'0~2':s.dd+'+'}</div>
+      <div class="sg-nm">${s.label}</div>
+      <div class="sg-pos" style="color:${s.color}">${s.pos}%</div>
+    </div>`;
+  }).join('');
+
+  const recentHtml=recentDD.length===0
+    ?`<div class="tbl-empty">최근 분산일 없음</div>`
+    :recentDD.map(r=>{
+      const in25=rec25.some(x=>x.date===r.date&&x.isDD);
+      return `<div class="tbl-row c4 ${in25?'in25':''}">
+        <div class="t-date">${r.date}</div>
+        <div class="t-chg">${r.chg.toFixed(2)}%</div>
+        <div class="t-vol">${r.vol>1?(r.vol/1e4).toFixed(0)+'만':'—'}</div>
+        <div><span class="bdg ${in25?'b25':'bold'}">${in25?'25일내':'이전'}</span></div>
+      </div>`;
+    }).join('');
+
+  const years=[...new Set(rows.filter(r=>r.isDD).map(r=>r.date.slice(0,4)))].sort().reverse();
+  const tabHtml=`<button class="ytab active" onclick="setYear('all',this)">전체</button>`
+    +years.map(y=>`<button class="ytab" onclick="setYear('${y}',this)">${y}</button>`).join('');
+
+  document.getElementById('app').innerHTML = `
+    <div class="pos-card">
+      <div class="pos-label">현재 권장 포지션</div>
+      <div class="pos-row">
+        <div class="pos-num">${pos}</div><div class="pos-unit">%</div>
+      </div>
+      <div class="pos-desc">${pos===100?'포지션 전량 유지 · 위험 신호 없음':`포지션 ${pos}% 유지 · ${100-pos}% 현금 확보 권장`}</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="stage-badge" style="color:${stage.color};border-color:${stage.color};background:${stage.color}14">
+          <div class="dot" style="background:${stage.color}"></div>${stage.label}
+        </div>
+        ${!filt?`<span style="font-size:12px;color:var(--muted)">52주 고점 ${p52w.toFixed(1)}% · 필터 미충족</span>`:''}
+        ${filt&&!abvMA?`<span style="font-size:12px;color:var(--orange)">⚠ MA60 이탈</span>`:''}
+      </div>
+      <div class="dd-bar">
+        <div class="dd-bar-lbl">DD 누적<br>(25일)</div>
+        <div class="dd-dots">${dots}</div>
+        <div class="dd-num">${ddCnt}</div>
+        <div class="dd-den">&nbsp;/ ${P.ddSignal}</div>
+      </div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric">
+        <div class="m-lbl">KOSPI</div>
+        <div class="m-val" style="color:var(--blue)">${lt.close.toLocaleString('ko-KR',{maximumFractionDigits:0})}</div>
+        <div class="m-sub" style="color:${lt.chg>=0?'var(--green)':'var(--red)'}">${lt.chg>=0?'+':''}${lt.chg.toFixed(2)}%</div>
+      </div>
+      <div class="metric">
+        <div class="m-lbl">52주 고점</div>
+        <div class="m-val" style="color:${p52w<=-5?'var(--orange)':'var(--green)'}">${p52w.toFixed(1)}%</div>
+        <div class="m-sub">${p52w<=-5?'⚠ 필터 ON':'정상 범위'}</div>
+      </div>
+      <div class="metric">
+        <div class="m-lbl">MA60</div>
+        <div class="m-val" style="color:${abvMA?'var(--green)':'var(--red)'}">${abvMA?'위':'아래'}</div>
+        <div class="m-sub">${abvMA?'추세 유지':'⚠ 이탈'}</div>
+      </div>
+    </div>
+
+    <div class="sec">포지션 단계</div>
+    <div class="sg">${sg}</div>
+
+    <div class="sec">최근 분산일 (25거래일)</div>
+    <div class="tbl">
+      <div class="tbl-hd c4"><span>날짜</span><span>등락률</span><span>거래량</span><span>구간</span></div>
+      ${recentHtml}
+    </div>
+
+    <button class="btn" onclick="showUpload()">📂 다른 파일 업로드</button>
+
+    <footer>
+      <span>기준: 하락 ${P.dropThresh}% / MA${P.volMa} / DD ${P.ddSignal}일</span>
+      <span>데이터: ${rows[0].date} ~ ${lt.date} (${rows.length}거래일)</span>
+    </footer>
+
+    <div class="sec" style="margin-top:28px">과거 분산일 전체</div>
+    <div class="ytabs">${tabHtml}</div>
+    <div class="tbl">
+      <div class="tbl-hd c5"><span>날짜</span><span>등락률</span><span>거래량</span><span>DD누적</span><span>단계</span></div>
+      <div id="hist-body"></div>
+    </div>
+    <div style="height:40px"></div>
+  `;
+  renderHist('all');
+}
+
+showUpload();
+</script>
+</body>
+</html>
